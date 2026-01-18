@@ -1,9 +1,14 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
 import '../models/build_directory.dart';
 import '../utils/platform_utils.dart';
+
+/// Callback for reporting scan progress
+typedef ScanProgressCallback = void Function(String currentPath);
 
 /// Configuration for directory scanning
 class ScanConfig {
@@ -43,7 +48,11 @@ class Scanner {
   final ScanConfig config;
 
   /// Scans the given directory for build folders
-  Future<List<BuildDirectory>> scan(String directoryPath) async {
+  /// Optionally accepts a progress callback to report current scanning path
+  Future<List<BuildDirectory>> scan(
+    String directoryPath, {
+    ScanProgressCallback? onProgress,
+  }) async {
     final expandedPath = expandPath(directoryPath);
     final dir = Directory(expandedPath);
 
@@ -55,41 +64,66 @@ class Scanner {
 
     if (platform == SupportedPlatform.macOS ||
         platform == SupportedPlatform.linux) {
-      return _scanWithFind(expandedPath);
+      return _scanWithFind(expandedPath, onProgress: onProgress);
     } else {
-      return _scanWithDart(dir);
+      return _scanWithDart(dir, onProgress: onProgress);
     }
   }
 
-  /// Scans using Unix find command (faster on macOS/Linux)
-  Future<List<BuildDirectory>> _scanWithFind(String directoryPath) async {
+  /// Scans using Unix find command with streaming output
+  Future<List<BuildDirectory>> _scanWithFind(
+    String directoryPath, {
+    ScanProgressCallback? onProgress,
+  }) async {
     final results = <BuildDirectory>[];
 
     for (final pattern in config.allPatterns) {
-      final process = await Process.run(
+      // First, find all matching directories with progress reporting
+      final findProcess = await Process.start(
         'find',
-        [
-          '.',
-          '-type',
-          'd',
-          '-name',
-          pattern,
-          '-exec',
-          'du',
-          '-s',
-          '-k',
-          '{}',
-          '+',
-        ],
+        ['.', '-type', 'd', '-name', pattern],
         workingDirectory: directoryPath,
       );
 
-      if (process.exitCode == 0) {
-        final lines = (process.stdout as String).split('\n');
-        for (final line in lines) {
-          final record = _parseDiskUsageLine(line, directoryPath);
-          if (record != null && _matchesFilters(record)) {
-            results.add(record);
+      final foundPaths = <String>[];
+
+      await for (final line in findProcess.stdout
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())) {
+        if (line.isNotEmpty) {
+          final relativePath = line.replaceFirst('./', '');
+          foundPaths.add(relativePath);
+
+          // Report progress with shortened path
+          if (onProgress != null) {
+            onProgress('Found: ${_shortenPath(relativePath)}');
+          }
+        }
+      }
+
+      await findProcess.exitCode;
+
+      // Now get sizes for all found directories
+      if (foundPaths.isNotEmpty) {
+        for (final relativePath in foundPaths) {
+          final fullPath = p.join(directoryPath, relativePath);
+
+          // Report calculating size
+          if (onProgress != null) {
+            onProgress('Calculating size: ${_shortenPath(relativePath)}');
+          }
+
+          final duProcess = await Process.run(
+            'du',
+            ['-s', '-k', fullPath],
+          );
+
+          if (duProcess.exitCode == 0) {
+            final output = (duProcess.stdout as String).trim();
+            final record = _parseDuOutput(output, fullPath);
+            if (record != null && _matchesFilters(record)) {
+              results.add(record);
+            }
           }
         }
       }
@@ -101,14 +135,30 @@ class Scanner {
   }
 
   /// Scans using pure Dart (for Windows or fallback)
-  Future<List<BuildDirectory>> _scanWithDart(Directory rootDir) async {
+  Future<List<BuildDirectory>> _scanWithDart(
+    Directory rootDir, {
+    ScanProgressCallback? onProgress,
+  }) async {
     final results = <BuildDirectory>[];
     final patternSet = config.allPatterns.toSet();
+    final basePath = rootDir.path;
 
-    await for (final entity in rootDir.list(recursive: true, followLinks: false)) {
+    await for (final entity
+        in rootDir.list(recursive: true, followLinks: false)) {
       if (entity is Directory) {
+        // Report current directory being scanned
+        if (onProgress != null) {
+          final relativePath = p.relative(entity.path, from: basePath);
+          onProgress('Scanning: ${_shortenPath(relativePath)}');
+        }
+
         final name = p.basename(entity.path);
         if (patternSet.contains(name) && !_shouldExclude(entity.path)) {
+          if (onProgress != null) {
+            final relativePath = p.relative(entity.path, from: basePath);
+            onProgress('Calculating size: ${_shortenPath(relativePath)}');
+          }
+
           final size = await _calculateDirectorySize(entity);
           final record = BuildDirectory(
             path: entity.path,
@@ -125,17 +175,13 @@ class Scanner {
     return results;
   }
 
-  /// Parses a line from du output
-  BuildDirectory? _parseDiskUsageLine(String line, String basePath) {
-    final pattern = RegExp(r'([0-9]+)\s+(.+)$');
-    final match = pattern.firstMatch(line);
+  /// Parses du command output
+  BuildDirectory? _parseDuOutput(String output, String fullPath) {
+    final pattern = RegExp(r'^(\d+)');
+    final match = pattern.firstMatch(output);
     if (match != null) {
       final sizeStr = match.group(1);
-      final pathStr = match.group(2);
-      if (sizeStr != null && pathStr != null) {
-        // Convert relative path to absolute
-        final relativePath = pathStr.trim().replaceFirst('./', '');
-        final fullPath = p.join(basePath, relativePath);
+      if (sizeStr != null) {
         return BuildDirectory(
           path: fullPath,
           sizeInKB: int.parse(sizeStr),
@@ -143,6 +189,17 @@ class Scanner {
       }
     }
     return null;
+  }
+
+  /// Shortens a path for display
+  String _shortenPath(String path) {
+    if (path.length <= 50) return path;
+
+    final parts = path.split('/');
+    if (parts.length <= 3) return path;
+
+    // Show first part, ellipsis, and last 2 parts
+    return '${parts.first}/.../${parts.sublist(parts.length - 2).join('/')}';
   }
 
   /// Checks if a path should be excluded
@@ -165,7 +222,8 @@ class Scanner {
   Future<int> _calculateDirectorySize(Directory dir) async {
     int size = 0;
     try {
-      await for (final entity in dir.list(recursive: true, followLinks: false)) {
+      await for (final entity
+          in dir.list(recursive: true, followLinks: false)) {
         if (entity is File) {
           size += await entity.length();
         }

@@ -104,12 +104,17 @@ void main(List<String> arguments) async {
   // Run the scan with spinner
   final scanner = Scanner(config: config);
   final stopwatch = Stopwatch()..start();
-  final scanSpinner = Spinner(message: 'Scanning $targetDir...');
+  final scanSpinner = Spinner(message: 'Scanning...');
   scanSpinner.start();
 
   List<BuildDirectory> directories;
   try {
-    directories = await scanner.scan(targetDir);
+    directories = await scanner.scan(
+      targetDir,
+      onProgress: (currentPath) {
+        scanSpinner.update(currentPath);
+      },
+    );
   } catch (e) {
     scanSpinner.error('Error scanning: $e');
     exit(1);
