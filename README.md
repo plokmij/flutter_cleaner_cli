@@ -20,7 +20,7 @@ A cross-platform command-line tool to clean Flutter build directories and free u
 
 ```bash
 # Clone the repository
-git clone https://github.com/user/flutter_cleaner_cli.git
+git clone https://github.com/plokmij/flutter_cleaner_cli.git
 cd flutter_cleaner_cli
 
 # Install dependencies
