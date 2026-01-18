@@ -7,6 +7,7 @@ import 'package:flutter_cleaner_cli/src/core/scanner.dart';
 import 'package:flutter_cleaner_cli/src/core/cleaner.dart';
 import 'package:flutter_cleaner_cli/src/models/build_directory.dart';
 import 'package:flutter_cleaner_cli/src/ui/interactive_selector.dart';
+import 'package:flutter_cleaner_cli/src/ui/spinner.dart';
 import 'package:flutter_cleaner_cli/src/utils/format_utils.dart';
 import 'package:flutter_cleaner_cli/src/utils/platform_utils.dart';
 
@@ -100,29 +101,30 @@ void main(List<String> arguments) async {
     includeDartTool: includeDartTool,
   );
 
-  // Run the scan
-  print('Scanning: $targetDir');
-  print('');
-
+  // Run the scan with spinner
   final scanner = Scanner(config: config);
   final stopwatch = Stopwatch()..start();
+  final scanSpinner = Spinner(message: 'Scanning $targetDir...');
+  scanSpinner.start();
 
   List<BuildDirectory> directories;
   try {
     directories = await scanner.scan(targetDir);
   } catch (e) {
-    print('Error scanning: $e');
+    scanSpinner.error('Error scanning: $e');
     exit(1);
   }
 
   stopwatch.stop();
 
   if (directories.isEmpty) {
-    print('No build directories found.');
+    scanSpinner.info('No build directories found.');
     exit(0);
   }
 
-  print('Found ${directories.length} build directories in ${formatDuration(stopwatch.elapsed)}');
+  scanSpinner.success(
+    'Found ${directories.length} build directories in ${formatDuration(stopwatch.elapsed)}',
+  );
   print('');
 
   // Calculate totals
@@ -235,16 +237,27 @@ Future<void> _deleteDirectories(List<BuildDirectory> directories, {bool permanen
   final cleaner = createCleaner();
 
   print('');
-  print(permanent ? 'Permanently deleting...' : 'Moving to trash...');
+  final deleteSpinner = Spinner(
+    message: permanent ? 'Permanently deleting...' : 'Moving to trash...',
+  );
+  deleteSpinner.start();
 
   final result = await cleaner.cleanDirectories(directories, permanent: permanent);
 
-  print('');
-  if (result.successCount > 0) {
-    print('Successfully ${permanent ? "deleted" : "moved to trash"}: ${result.successCount} directories (${formatSize(result.totalSize)})');
-  }
-  if (result.failCount > 0) {
-    print('Failed: ${result.failCount} directories');
+  if (result.failCount == 0) {
+    deleteSpinner.success(
+      '${permanent ? "Deleted" : "Moved to trash"}: ${result.successCount} directories (${formatSize(result.totalSize)})',
+    );
+  } else if (result.successCount > 0) {
+    deleteSpinner.info(
+      '${permanent ? "Deleted" : "Moved"}: ${result.successCount} directories (${formatSize(result.totalSize)})',
+    );
+    print('\x1B[33m!\x1B[0m Failed: ${result.failCount} directories');
+    for (final dir in result.failed) {
+      print('  - ${dir.path}');
+    }
+  } else {
+    deleteSpinner.error('Failed to delete ${result.failCount} directories');
     for (final dir in result.failed) {
       print('  - ${dir.path}');
     }
