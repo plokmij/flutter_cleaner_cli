@@ -136,32 +136,36 @@ class Scanner {
     final patternSet = config.allPatterns.toSet();
     final basePath = rootDir.path;
 
-    await for (final entity
-        in rootDir.list(recursive: true, followLinks: false)) {
-      if (entity is Directory) {
-        // Report current directory being scanned
-        if (onProgress != null) {
-          final relativePath = p.relative(entity.path, from: basePath);
-          onProgress('Scanning: ${_shortenPath(relativePath)}');
-        }
-
-        final name = p.basename(entity.path);
-        if (patternSet.contains(name) && !_shouldExclude(entity.path)) {
+    try {
+      await for (final entity
+          in rootDir.list(recursive: true, followLinks: false)) {
+        if (entity is Directory) {
+          // Report current directory being scanned
           if (onProgress != null) {
             final relativePath = p.relative(entity.path, from: basePath);
-            onProgress('Calculating size: ${_shortenPath(relativePath)}');
+            onProgress('Scanning: ${_shortenPath(relativePath)}');
           }
 
-          final size = await _calculateDirectorySize(entity);
-          final record = BuildDirectory(
-            path: entity.path,
-            sizeInKB: size ~/ 1024,
-          );
-          if (_matchesFilters(record)) {
-            results.add(record);
+          final name = p.basename(entity.path);
+          if (patternSet.contains(name) && !_shouldExclude(entity.path)) {
+            if (onProgress != null) {
+              final relativePath = p.relative(entity.path, from: basePath);
+              onProgress('Calculating size: ${_shortenPath(relativePath)}');
+            }
+
+            final size = await _calculateDirectorySize(entity);
+            final record = BuildDirectory(
+              path: entity.path,
+              sizeInKB: size ~/ 1024,
+            );
+            if (_matchesFilters(record)) {
+              results.add(record);
+            }
           }
         }
       }
+    } on FileSystemException {
+      // Skip directories we can't access (permission denied, etc.)
     }
 
     results.sort((a, b) => b.sizeInKB.compareTo(a.sizeInKB));
