@@ -16,6 +16,12 @@ A cross-platform command-line tool to clean Flutter build directories and free u
 
 ## Installation
 
+### From pub.dev
+
+```bash
+dart pub global activate flutter_cleaner_cli
+```
+
 ### From source
 
 ```bash
