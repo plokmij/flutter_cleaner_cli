@@ -60,14 +60,7 @@ class Scanner {
       throw ArgumentError('Directory does not exist: $directoryPath');
     }
 
-    final platform = getCurrentPlatform();
-
-    if (platform == SupportedPlatform.macOS ||
-        platform == SupportedPlatform.linux) {
-      return _scanWithFind(expandedPath, onProgress: onProgress);
-    } else {
-      return _scanWithDart(dir, onProgress: onProgress);
-    }
+    return _scanWithDart(dir, onProgress: onProgress);
   }
 
   /// Scans using Unix find command with streaming output
