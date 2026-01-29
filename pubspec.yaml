@@ -1,6 +1,7 @@
 name: flutter_cleaner_cli
 description: A cross-platform CLI tool to clean Flutter build directories and free up disk space.
 version: 1.0.0
+repository: https://github.com/plokmij/flutter_cleaner_cli
 
 environment:
   sdk: ^3.10.7

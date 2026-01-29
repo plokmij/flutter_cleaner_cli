@@ -1,5 +1,3 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -63,73 +61,7 @@ class Scanner {
     return _scanWithDart(dir, onProgress: onProgress);
   }
 
-  /// Scans using Unix find command with streaming output
-  Future<List<BuildDirectory>> _scanWithFind(
-    String directoryPath, {
-    ScanProgressCallback? onProgress,
-  }) async {
-    final results = <BuildDirectory>[];
-
-    for (final pattern in config.allPatterns) {
-      // First, find all matching directories with progress reporting
-      final findProcess = await Process.start(
-        'find',
-        ['.', '-type', 'd', '-name', pattern],
-        workingDirectory: directoryPath,
-      );
-
-      final foundPaths = <String>[];
-
-      await for (final line in findProcess.stdout
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())) {
-        if (line.isNotEmpty) {
-          final relativePath = line.replaceFirst('./', '');
-          foundPaths.add(relativePath);
-
-          // Report progress with shortened path
-          if (onProgress != null) {
-            onProgress('Found: ${_shortenPath(relativePath)}');
-          }
-        }
-      }
-
-      await findProcess.exitCode;
-
-      // Now get sizes for all found directories
-      if (foundPaths.isNotEmpty) {
-        for (final relativePath in foundPaths) {
-          final fullPath = p.join(directoryPath, relativePath);
-
-          if (!_isFlutterProjectBuild(fullPath)) continue;
-
-          // Report calculating size
-          if (onProgress != null) {
-            onProgress('Calculating size: ${_shortenPath(relativePath)}');
-          }
-
-          final duProcess = await Process.run(
-            'du',
-            ['-s', '-k', fullPath],
-          );
-
-          if (duProcess.exitCode == 0) {
-            final output = (duProcess.stdout as String).trim();
-            final record = _parseDuOutput(output, fullPath);
-            if (record != null && _matchesFilters(record)) {
-              results.add(record);
-            }
-          }
-        }
-      }
-    }
-
-    // Sort by size descending
-    results.sort((a, b) => b.sizeInKB.compareTo(a.sizeInKB));
-    return results;
-  }
-
-  /// Scans using pure Dart (for Windows or fallback)
+  /// Scans using pure Dart
   Future<List<BuildDirectory>> _scanWithDart(
     Directory rootDir, {
     ScanProgressCallback? onProgress,
@@ -172,22 +104,6 @@ class Scanner {
 
     results.sort((a, b) => b.sizeInKB.compareTo(a.sizeInKB));
     return results;
-  }
-
-  /// Parses du command output
-  BuildDirectory? _parseDuOutput(String output, String fullPath) {
-    final pattern = RegExp(r'^(\d+)');
-    final match = pattern.firstMatch(output);
-    if (match != null) {
-      final sizeStr = match.group(1);
-      if (sizeStr != null) {
-        return BuildDirectory(
-          path: fullPath,
-          sizeInKB: int.parse(sizeStr),
-        );
-      }
-    }
-    return null;
   }
 
   /// Shortens a path for display
