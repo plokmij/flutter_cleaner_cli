@@ -101,6 +101,8 @@ class Scanner {
         for (final relativePath in foundPaths) {
           final fullPath = p.join(directoryPath, relativePath);
 
+          if (!_isFlutterProjectBuild(fullPath)) continue;
+
           // Report calculating size
           if (onProgress != null) {
             onProgress('Calculating size: ${_shortenPath(relativePath)}');
@@ -147,7 +149,7 @@ class Scanner {
           }
 
           final name = p.basename(entity.path);
-          if (patternSet.contains(name) && !_shouldExclude(entity.path)) {
+          if (patternSet.contains(name) && !_shouldExclude(entity.path) && _isFlutterProjectBuild(entity.path)) {
             if (onProgress != null) {
               final relativePath = p.relative(entity.path, from: basePath);
               onProgress('Calculating size: ${_shortenPath(relativePath)}');
@@ -197,6 +199,13 @@ class Scanner {
 
     // Show first part, ellipsis, and last 2 parts
     return '${parts.first}/.../${parts.sublist(parts.length - 2).join('/')}';
+  }
+
+  /// Checks if a build directory belongs to a Flutter/Dart project
+  /// by looking for pubspec.yaml in its parent directory.
+  bool _isFlutterProjectBuild(String buildDirPath) {
+    final parent = p.dirname(buildDirPath);
+    return File(p.join(parent, 'pubspec.yaml')).existsSync();
   }
 
   /// Checks if a path should be excluded
