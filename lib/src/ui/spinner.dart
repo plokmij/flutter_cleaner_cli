@@ -9,7 +9,7 @@ class Spinner {
     this.interval = const Duration(milliseconds: 80),
   });
 
-  final String message;
+  String message;
   final List<String> frames;
   final Duration interval;
 
@@ -36,8 +36,7 @@ class Spinner {
 
   /// Updates the spinner message
   void update(String newMessage) {
-    _clearLine();
-    stdout.write('\r\x1B[36m${frames[_frameIndex]}\x1B[0m $newMessage');
+    message = newMessage;
   }
 
   /// Stops the spinner with a success message
