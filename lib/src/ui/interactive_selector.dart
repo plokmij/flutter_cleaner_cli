@@ -98,7 +98,8 @@ class InteractiveSelector {
               break;
             case 100: // 'd' - delete
             case 68: // 'D'
-            case 13: // Enter
+            case 10: // Enter (LF)
+            case 13: // Enter (CR)
               final selected = _getSelectedDirectories();
               if (selected.isNotEmpty) {
                 _clearScreen();
