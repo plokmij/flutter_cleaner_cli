@@ -177,8 +177,14 @@ void main(List<String> arguments) async {
 
   // Confirm deletion
   final selectedSize = selectionResult.selected.fold<int>(0, (sum, dir) => sum + dir.sizeInKB);
+  final projectNames = selectionResult.selected
+      .map((dir) => p.basename(p.dirname(dir.path)))
+      .toSet()
+      .toList()
+    ..sort();
   print('');
   print('About to ${permanent ? "permanently delete" : "move to trash"} ${selectionResult.selected.length} directories (${formatSize(selectedSize)})');
+  print('Projects: ${projectNames.join(', ')}');
   stdout.write('Continue? [y/N] ');
 
   final confirmation = stdin.readLineSync()?.toLowerCase();
