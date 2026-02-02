@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -61,45 +62,66 @@ class Scanner {
     return _scanWithDart(dir, onProgress: onProgress);
   }
 
-  /// Scans using pure Dart
+  /// Scans by first finding all pubspec.yaml files (fast), then checking
+  /// for build directories next to them.
   Future<List<BuildDirectory>> _scanWithDart(
     Directory rootDir, {
     ScanProgressCallback? onProgress,
   }) async {
     final results = <BuildDirectory>[];
-    final patternSet = config.allPatterns.toSet();
+    final patterns = config.allPatterns;
     final basePath = rootDir.path;
 
+    if (onProgress != null) {
+      onProgress('Scanning for Flutter/Dart projects...');
+    }
+
+    // Step 1: Find all pubspec.yaml files using `find` (very fast)
     try {
-      await for (final entity
-          in rootDir.list(recursive: true, followLinks: false)) {
-        if (entity is Directory) {
-          // Report current directory being scanned
+      final result = await Process.run('find', [
+        basePath,
+        '-name', 'pubspec.yaml',
+        '-not', '-path', '*/.git/*',
+        '-not', '-path', '*/node_modules/*',
+      ], stderrEncoding: const SystemEncoding());
+
+      final pubspecPaths = (result.stdout as String)
+          .split('\n')
+          .where((l) => l.isNotEmpty)
+          .toList();
+
+      // Step 2: For each pubspec.yaml, check if matching build dirs exist
+      for (final pubspecPath in pubspecPaths) {
+        final projectDir = p.dirname(pubspecPath);
+        if (_shouldExclude(projectDir)) continue;
+
+        for (final pattern in patterns) {
+          final candidatePath = p.join(projectDir, pattern);
+          final candidate = Directory(candidatePath);
+
+          if (!candidate.existsSync()) continue;
+
           if (onProgress != null) {
-            final relativePath = p.relative(entity.path, from: basePath);
-            onProgress('Scanning: ${_shortenPath(relativePath)}');
+            final relativePath = p.relative(candidatePath, from: basePath);
+            onProgress('Calculating size: ${_shortenPath(relativePath)}');
           }
 
-          final name = p.basename(entity.path);
-          if (patternSet.contains(name) && !_shouldExclude(entity.path) && _isFlutterProjectBuild(entity.path)) {
-            if (onProgress != null) {
-              final relativePath = p.relative(entity.path, from: basePath);
-              onProgress('Calculating size: ${_shortenPath(relativePath)}');
-            }
-
-            final size = await _calculateDirectorySize(entity);
+          try {
+            final size = await _calculateDirectorySize(candidate);
             final record = BuildDirectory(
-              path: entity.path,
+              path: candidatePath,
               sizeInKB: size ~/ 1024,
             );
             if (_matchesFilters(record)) {
               results.add(record);
             }
+          } catch (_) {
+            // Skip entries we can't measure
           }
         }
       }
-    } on FileSystemException {
-      // Skip directories we can't access (permission denied, etc.)
+    } catch (_) {
+      // find command not available or failed
     }
 
     results.sort((a, b) => b.sizeInKB.compareTo(a.sizeInKB));

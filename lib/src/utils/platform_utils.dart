@@ -29,6 +29,14 @@ String getHomeDirectory() {
   return home ?? '.';
 }
 
+/// Returns true if the given path is the user's home directory
+bool isHomeDirectory(String path) {
+  final home = getHomeDirectory();
+  if (home == '.') return false;
+  return Directory(path).resolveSymbolicLinksSync() ==
+      Directory(home).resolveSymbolicLinksSync();
+}
+
 /// Expands ~ to the home directory in a path
 String expandPath(String path) {
   if (path.startsWith('~/')) {

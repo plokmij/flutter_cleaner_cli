@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:flutter_cleaner_cli/src/core/scanner.dart';
 import 'package:flutter_cleaner_cli/src/core/cleaner.dart';
 import 'package:flutter_cleaner_cli/src/models/build_directory.dart';
+import 'package:flutter_cleaner_cli/src/ui/directory_picker.dart';
 import 'package:flutter_cleaner_cli/src/ui/interactive_selector.dart';
 import 'package:flutter_cleaner_cli/src/ui/spinner.dart';
 import 'package:flutter_cleaner_cli/src/utils/format_utils.dart';
@@ -93,6 +94,22 @@ void main(List<String> arguments) async {
     excludePatterns = excludeStr.split(',').map((s) => s.trim()).toList();
   }
 
+  // Home directory guard: show directory picker instead of scanning everything
+  List<String> scanTargets = [targetDir];
+  if (isHomeDirectory(targetDir)) {
+    if (autoConfirm) {
+      print('\x1B[33mWarning: Scanning the entire home directory may take a very long time!\x1B[0m');
+    } else {
+      final picker = DirectoryPicker(baseDirectory: targetDir);
+      final pickerResult = await picker.run();
+      if (pickerResult.directories == null) {
+        print('Cancelled.');
+        exit(0);
+      }
+      scanTargets = pickerResult.directories!;
+    }
+  }
+
   // Create scanner config
   final config = ScanConfig(
     patterns: patterns,
@@ -109,12 +126,18 @@ void main(List<String> arguments) async {
 
   List<BuildDirectory> directories;
   try {
-    directories = await scanner.scan(
-      targetDir,
-      onProgress: (currentPath) {
-        scanSpinner.update(currentPath);
-      },
-    );
+    final allResults = <BuildDirectory>[];
+    for (final target in scanTargets) {
+      final results = await scanner.scan(
+        target,
+        onProgress: (currentPath) {
+          scanSpinner.update(currentPath);
+        },
+      );
+      allResults.addAll(results);
+    }
+    allResults.sort((a, b) => b.sizeInKB.compareTo(a.sizeInKB));
+    directories = allResults;
   } catch (e) {
     scanSpinner.error('Error scanning: $e');
     exit(1);
