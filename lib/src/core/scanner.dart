@@ -94,6 +94,7 @@ class Scanner {
       for (final pubspecPath in pubspecPaths) {
         final projectDir = p.dirname(pubspecPath);
         if (_shouldExclude(projectDir)) continue;
+        if (_isInsideFlutterSdk(projectDir)) continue;
 
         for (final pattern in patterns) {
           final candidatePath = p.join(projectDir, pattern);
@@ -144,6 +145,18 @@ class Scanner {
   bool _isFlutterProjectBuild(String buildDirPath) {
     final parent = p.dirname(buildDirPath);
     return File(p.join(parent, 'pubspec.yaml')).existsSync();
+  }
+
+  /// Checks if a project directory is inside a Flutter SDK installation
+  bool _isInsideFlutterSdk(String projectDir) {
+    var dir = projectDir;
+    while (true) {
+      final parent = p.dirname(dir);
+      if (parent == dir) break; // reached root
+      if (File(p.join(parent, 'bin', 'flutter')).existsSync()) return true;
+      dir = parent;
+    }
+    return false;
   }
 
   /// Checks if a path should be excluded
