@@ -180,7 +180,7 @@ void main(List<String> arguments) async {
 
   // Non-interactive mode with auto-confirm
   if (autoConfirm) {
-    await _deleteDirectories(directories, permanent: permanent);
+    await _deleteDirectories(directories, permanent: permanent, autoConfirm: true);
     exit(0);
   }
 
@@ -216,7 +216,7 @@ void main(List<String> arguments) async {
     exit(0);
   }
 
-  await _deleteDirectories(selectionResult.selected, permanent: permanent);
+  await _deleteDirectories(selectionResult.selected, permanent: permanent, autoConfirm: false);
 }
 
 void _printUsage(ArgParser parser) {
@@ -267,7 +267,7 @@ void _outputJson(List<BuildDirectory> directories, String baseDir) {
   print(']');
 }
 
-Future<void> _deleteDirectories(List<BuildDirectory> directories, {bool permanent = false}) async {
+Future<void> _deleteDirectories(List<BuildDirectory> directories, {bool permanent = false, bool autoConfirm = false}) async {
   final cleaner = createCleaner();
 
   print('');
@@ -294,6 +294,22 @@ Future<void> _deleteDirectories(List<BuildDirectory> directories, {bool permanen
     deleteSpinner.error('Failed to delete ${result.failCount} directories');
     for (final dir in result.failed) {
       print('  - ${dir.path}');
+    }
+  }
+
+  // Offer to permanently remove trashed items
+  if (!permanent && result.successCount > 0 && !autoConfirm) {
+    print('');
+    stdout.write('Permanently remove these from trash? [y/N] ');
+    final answer = stdin.readLineSync()?.toLowerCase();
+    if (answer == 'y' || answer == 'yes') {
+      int removed = 0;
+      for (final dir in result.successful) {
+        if (await cleaner.deleteFromTrash(dir.path)) {
+          removed++;
+        }
+      }
+      print('Permanently removed $removed item${removed == 1 ? '' : 's'} from trash.');
     }
   }
 }

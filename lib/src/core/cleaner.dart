@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
+
 import '../models/build_directory.dart';
 import '../utils/platform_utils.dart';
 
@@ -27,6 +29,9 @@ abstract class Cleaner {
 
   /// Permanently deletes a directory
   Future<bool> permanentDelete(String path);
+
+  /// Deletes a previously trashed item from trash by its original path
+  Future<bool> deleteFromTrash(String originalPath);
 
   /// Cleans multiple directories
   Future<CleanResult> cleanDirectories(
@@ -64,6 +69,14 @@ abstract class Cleaner {
 /// macOS-specific cleaner using Finder
 class MacOSCleaner extends Cleaner {
   @override
+  Future<bool> deleteFromTrash(String originalPath) async {
+    final basename = p.basename(originalPath);
+    final trashPath = p.join(Platform.environment['HOME']!, '.Trash', basename);
+    final process = await Process.run('rm', ['-rf', trashPath]);
+    return process.exitCode == 0;
+  }
+
+  @override
   Future<bool> moveToTrash(String path) async {
     final process = await Process.run(
       'osascript',
@@ -80,6 +93,17 @@ class MacOSCleaner extends Cleaner {
 
 /// Linux-specific cleaner using gio or trash-cli
 class LinuxCleaner extends Cleaner {
+  @override
+  Future<bool> deleteFromTrash(String originalPath) async {
+    final basename = p.basename(originalPath);
+    final home = Platform.environment['HOME']!;
+    final filePath = p.join(home, '.local', 'share', 'Trash', 'files', basename);
+    final infoPath = p.join(home, '.local', 'share', 'Trash', 'info', '$basename.trashinfo');
+    final result = await Process.run('rm', ['-rf', filePath]);
+    await Process.run('rm', ['-f', infoPath]);
+    return result.exitCode == 0;
+  }
+
   @override
   Future<bool> moveToTrash(String path) async {
     // Try gio first (GNOME)
@@ -102,6 +126,11 @@ class LinuxCleaner extends Cleaner {
 
 /// Windows-specific cleaner
 class WindowsCleaner extends Cleaner {
+  @override
+  Future<bool> deleteFromTrash(String originalPath) async {
+    return false;
+  }
+
   @override
   Future<bool> moveToTrash(String path) async {
     // Windows doesn't have easy trash access from command line
