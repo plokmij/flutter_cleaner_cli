@@ -1,15 +1,13 @@
 import 'dart:io';
 
 import 'interactive_selector.dart';
-import '../utils/format_utils.dart';
 
 /// Entry representing a subdirectory in the picker
 class _DirEntry {
   final String path;
   final String name;
-  final int sizeInKB;
 
-  _DirEntry({required this.path, required this.name, required this.sizeInKB});
+  _DirEntry({required this.path, required this.name});
 }
 
 /// Result of the directory picker
@@ -26,7 +24,7 @@ class DirectoryPicker {
 
   DirectoryPicker({required this.baseDirectory});
 
-  /// List non-hidden immediate subdirectories with their sizes
+  /// List non-hidden immediate subdirectories
   Future<List<_DirEntry>> _listDirectories() async {
     final dir = Directory(baseDirectory);
     final entries = <_DirEntry>[];
@@ -36,17 +34,7 @@ class DirectoryPicker {
       final name = entity.path.split('/').last;
       if (name.startsWith('.')) continue;
 
-      // Use du for fast size calculation
-      int sizeKB = 0;
-      try {
-        final result = await Process.run('du', ['-sk', entity.path]);
-        if (result.exitCode == 0) {
-          final line = (result.stdout as String).trim();
-          sizeKB = int.tryParse(line.split('\t').first) ?? 0;
-        }
-      } catch (_) {}
-
-      entries.add(_DirEntry(path: entity.path, name: name, sizeInKB: sizeKB));
+      entries.add(_DirEntry(path: entity.path, name: name));
     }
 
     entries.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
@@ -104,12 +92,11 @@ class DirectoryPicker {
 
           if (i == 0) {
             print(
-                '$highlight  $checkbox ${'All directories'.padRight(40)} ${Colors.yellow}(may take a very long time)${Colors.reset}$resetHighlight');
+                '$highlight  $checkbox All directories ${Colors.yellow}(may take a very long time)${Colors.reset}$resetHighlight');
           } else {
             final dir = dirs[i - 1];
-            final size = formatSize(dir.sizeInKB);
             print(
-                '$highlight  $checkbox ${dir.name.padRight(40)} ${Colors.dim}${size.padLeft(10)}${Colors.reset}$resetHighlight');
+                '$highlight  $checkbox ${dir.name}$resetHighlight');
           }
         }
 
