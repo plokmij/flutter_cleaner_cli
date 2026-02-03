@@ -140,13 +140,6 @@ class Scanner {
     return '${parts.first}/.../${parts.sublist(parts.length - 2).join('/')}';
   }
 
-  /// Checks if a build directory belongs to a Flutter/Dart project
-  /// by looking for pubspec.yaml in its parent directory.
-  bool _isFlutterProjectBuild(String buildDirPath) {
-    final parent = p.dirname(buildDirPath);
-    return File(p.join(parent, 'pubspec.yaml')).existsSync();
-  }
-
   /// Checks if a project directory is inside a Flutter SDK installation
   bool _isInsideFlutterSdk(String projectDir) {
     var dir = projectDir;

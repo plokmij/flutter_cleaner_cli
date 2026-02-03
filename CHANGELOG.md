@@ -1,3 +1,8 @@
+## 1.1.2
+
+- Fix removing trashed build directories from macOS Trash
+- Remove unused code
+
 ## 1.1.1
 
 - Fix --version displaying incorrect version number

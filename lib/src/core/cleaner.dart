@@ -71,9 +71,28 @@ class MacOSCleaner extends Cleaner {
   @override
   Future<bool> deleteFromTrash(String originalPath) async {
     final basename = p.basename(originalPath);
-    final trashPath = p.join(Platform.environment['HOME']!, '.Trash', basename);
-    final process = await Process.run('rm', ['-rf', trashPath]);
-    return process.exitCode == 0;
+    final home = Platform.environment['HOME']!;
+    final trashDir = p.join(home, '.Trash');
+
+    // Finder may rename duplicates (e.g. "build 2"), so find all matches
+    try {
+      final dir = Directory(trashDir);
+      if (!dir.existsSync()) return false;
+
+      final matches = dir.listSync().where((e) {
+        final name = p.basename(e.path);
+        return name == basename || name.startsWith('$basename ');
+      });
+
+      if (matches.isEmpty) return true; // already gone
+
+      for (final match in matches) {
+        await Process.run('rm', ['-rf', match.path]);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   @override
