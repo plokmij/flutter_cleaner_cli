@@ -12,7 +12,7 @@ import 'package:flutter_cleaner_cli/src/ui/spinner.dart';
 import 'package:flutter_cleaner_cli/src/utils/format_utils.dart';
 import 'package:flutter_cleaner_cli/src/utils/platform_utils.dart';
 
-const version = '1.0.0';
+const version = '1.1.0';
 
 void main(List<String> arguments) async {
   final parser = ArgParser()
