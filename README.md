@@ -1,13 +1,13 @@
 # Flutter Cleaner CLI
 
-A cross-platform command-line tool to clean Flutter build directories and free up disk space.
+A command-line tool to clean Flutter build directories and free up disk space.
 
 > **Note:** This is a vibecoded project - built collaboratively with AI assistance.
 
 ## Features
 
 - **Interactive TUI** - Navigate with arrow keys, select with checkboxes
-- **Cross-platform** - Works on macOS, Linux, and Windows
+- **Platform support** - Tested on macOS; Linux should mostly work (requires `gio` or `trash-put` for trash); Windows is not currently supported
 - **Safe deletion** - Moves to trash by default (recoverable)
 - **Dry-run mode** - Preview what would be deleted
 - **Size filters** - Only show directories above a threshold
