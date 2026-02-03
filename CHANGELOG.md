@@ -1,3 +1,8 @@
+## 1.1.1
+
+- Fix --version displaying incorrect version number
+- Update README to accurately reflect platform support
+
 ## 1.1.0
 
 - Exclude Flutter SDK directories from scan results
