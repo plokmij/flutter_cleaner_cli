@@ -303,13 +303,28 @@ Future<void> _deleteDirectories(List<BuildDirectory> directories, {bool permanen
     stdout.write('Permanently remove these from trash? [y/N] ');
     final answer = stdin.readLineSync()?.toLowerCase();
     if (answer == 'y' || answer == 'yes') {
+      // Try removing individual items first
       int removed = 0;
       for (final dir in result.successful) {
         if (await cleaner.deleteFromTrash(dir.path)) {
           removed++;
         }
       }
-      print('Permanently removed $removed item${removed == 1 ? '' : 's'} from trash.');
+      if (removed > 0) {
+        print('Permanently removed $removed item${removed == 1 ? '' : 's'} from trash.');
+      } else {
+        // Individual deletion failed (likely macOS TCC restriction),
+        // fall back to emptying trash via Finder
+        stdout.write('Could not remove individual items. Empty entire trash instead? [y/N] ');
+        final emptyAnswer = stdin.readLineSync()?.toLowerCase();
+        if (emptyAnswer == 'y' || emptyAnswer == 'yes') {
+          if (await cleaner.emptyTrash()) {
+            print('Trash emptied.');
+          } else {
+            print('Failed to empty trash. You may need to empty it manually from Finder.');
+          }
+        }
+      }
     }
   }
 }

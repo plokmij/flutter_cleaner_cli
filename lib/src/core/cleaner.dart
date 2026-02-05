@@ -33,6 +33,9 @@ abstract class Cleaner {
   /// Deletes a previously trashed item from trash by its original path
   Future<bool> deleteFromTrash(String originalPath);
 
+  /// Empties the system trash
+  Future<bool> emptyTrash();
+
   /// Cleans multiple directories
   Future<CleanResult> cleanDirectories(
     List<BuildDirectory> directories, {
@@ -96,6 +99,15 @@ class MacOSCleaner extends Cleaner {
   }
 
   @override
+  Future<bool> emptyTrash() async {
+    final process = await Process.run(
+      'osascript',
+      ['-e', 'tell application "Finder" to empty trash'],
+    );
+    return process.exitCode == 0;
+  }
+
+  @override
   Future<bool> moveToTrash(String path) async {
     final process = await Process.run(
       'osascript',
@@ -112,6 +124,23 @@ class MacOSCleaner extends Cleaner {
 
 /// Linux-specific cleaner using gio or trash-cli
 class LinuxCleaner extends Cleaner {
+  @override
+  Future<bool> emptyTrash() async {
+    // Try gio first
+    var process = await Process.run('gio', ['trash', '--empty']);
+    if (process.exitCode == 0) return true;
+
+    // Fallback: manually remove trash contents
+    final home = Platform.environment['HOME']!;
+    final trashFiles = p.join(home, '.local', 'share', 'Trash', 'files');
+    final trashInfo = p.join(home, '.local', 'share', 'Trash', 'info');
+    await Process.run('rm', ['-rf', trashFiles]);
+    await Process.run('rm', ['-rf', trashInfo]);
+    await Directory(trashFiles).create(recursive: true);
+    await Directory(trashInfo).create(recursive: true);
+    return true;
+  }
+
   @override
   Future<bool> deleteFromTrash(String originalPath) async {
     final basename = p.basename(originalPath);
@@ -145,6 +174,11 @@ class LinuxCleaner extends Cleaner {
 
 /// Windows-specific cleaner
 class WindowsCleaner extends Cleaner {
+  @override
+  Future<bool> emptyTrash() async {
+    return false; // Not supported on Windows
+  }
+
   @override
   Future<bool> deleteFromTrash(String originalPath) async {
     return false;
